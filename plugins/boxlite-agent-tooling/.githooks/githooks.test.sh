@@ -873,8 +873,8 @@ rm -rf "$R" "$B"
 # "zzz-late" alphabetically and IS also an ancestor of the new branch (it's
 # zzz-late's own ancestor) — a scan that stops at the first match would pick
 # aaa-early's far older commit as the base and drag its whole history into
-# the audited diff. Neither branch is named main/master, so this exercises
-# the fallback scan specifically, not the default-branch fast path.
+# the audited diff. Neither branch is named main/master, so no default-branch
+# ref takes part in the scan here.
 R="$(setup)"
 B="$(mktemp -d)"; git init -q --bare "$B"; git -C "$R" remote add origin "$B"
 # Outside $R, not "$R/err.txt": the checkouts below cross branches after a
@@ -1007,6 +1007,23 @@ grep -q 'commit-subject .*feature before main moves on' "$R/moved-on-evidence.tx
   && moved_on_context=yes || moved_on_context=no
 check_eq "new-ref base finds real fork point after default branch moves on" "$moved_on_context" "yes"
 rm -rf "$R" "$B" "$moved_on_err"
+
+# A branch stacked on one already pushed resolves to that branch, not to the
+# default branch: its audit then covers the new layer, not every layer below it
+# again. The base goes up as `main` whatever `git init` named it here.
+R="$(setup)"
+B="$(mktemp -d)"; git init -q --bare "$B"; git -C "$R" remote add origin "$B"
+( cd "$R" && env -i PATH="$PATH" HOME="$HOME" git push -q origin HEAD:refs/heads/main >/dev/null 2>&1 )
+git -C "$R" checkout -qb stack-1
+printf 'stack 1\n' >> "$R/f"; git -C "$R" add -A; git -C "$R" commit -qm 'test(hooks): stack-1 layer'
+( cd "$R" && env -i PATH="$PATH" HOME="$HOME" git push -q origin stack-1:stack-1 >/dev/null 2>&1 )
+git -C "$R" fetch -q origin
+git -C "$R" checkout -qb stack-2
+printf 'stack 2\n' >> "$R/f"; git -C "$R" add -A; git -C "$R" commit -qm 'test(hooks): stack-2 layer'
+stacked_base="$(repo="$R" remote=origin new_ref_base_sha "$(git -C "$R" rev-parse stack-2)")"
+check_eq "new-ref base of a stacked branch is the pushed layer below it" \
+  "$stacked_base" "$(git -C "$R" rev-parse stack-1)"
+rm -rf "$R" "$B"
 
 R="$(setup)"
 B="$(mktemp -d)"; git init -q --bare "$B"; git -C "$R" remote add origin "$B"

@@ -53,6 +53,12 @@ A failed audit blocks the operation; a receipt only covers a push introducing
 exactly the audited commit, matching its parent, tree, and subject. After the
 chained hook succeeds (or is absent), the push may proceed.
 
+A new branch's pushed range starts at its closest ancestor already on the
+remote: the merge-base, among all remote-tracking refs, that leaves the fewest
+commits to push. A branch cut from the default branch starts there. A layer of
+a stack whose lower layer is already pushed starts at that layer, so each audit
+covers one layer instead of the whole stack.
+
 `pre-push` starts the watcher before transfer; the watcher waits for the commit
 and PR to appear remotely. Watcher startup is best effort and also applies to
 human pushes. `BOXLITE_PR_WATCH=0` disables startup.
